@@ -1,0 +1,15 @@
+const express = require("express")
+const PaymentController = require("../controller/payment.controller")
+const { authorize } = require("../middleware/authorization.middleware")
+
+const router = express.Router()
+
+
+router.post("/create", authorize("user",), PaymentController.PaymentCreation)
+router.post("/cancel", authorize("user",), PaymentController.cancelPayment)
+router.get("/record", authorize("merchant"), PaymentController.getAllPayments)
+router.get("/record/:id", authorize("merchant"), PaymentController.getPaymentById)
+router.get("/status/:id", authorize("user", "merchant"), PaymentController.PaymentStatusById)
+
+
+module.exports = router

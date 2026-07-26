@@ -1,4 +1,4 @@
-const StripeModel = require("../model/stripe.model")
+const StripeModel = require("../model/stripe")
 
 
 async function StripeRegister(req, res) {
@@ -61,7 +61,7 @@ async function StripeRegister(req, res) {
 
 async function UpdateStripe(req, res) {
 
-    const merchantId = req.user.id
+    const merchantId = req.merchant.id
     const { secretKey, publishableKey, webhookSecret, mode } = req.body
 
     try {
@@ -100,4 +100,29 @@ async function UpdateStripe(req, res) {
 
 }
 
-module.exports = { StripeRegister, UpdateStripe}
+async function GetMerchantconfigbyID(req, res) {
+   
+    const merchantId = req.params.merchantId;
+
+    try {
+        const merchantConfig = await StripeModel.findOne({ merchantId });
+
+        if (!merchantConfig) {
+            return res.status(404).json({
+                message: "Merchant Stripe Config does not exist"
+            });
+        }
+
+        res.status(200).json({
+            message: "Merchant Config Fetched Successfully",
+            result: merchantConfig
+        });
+    } catch (error) {
+        console.error("Error fetching stripe config:", error);
+        res.status(500).json({
+            message: "Internal Server Error"
+        });
+    }
+}
+
+module.exports = { StripeRegister, UpdateStripe, GetMerchantconfigbyID }

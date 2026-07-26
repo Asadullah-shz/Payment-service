@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+audit
 
 # Environment Variables
 .env

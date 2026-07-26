@@ -30,6 +30,6 @@ mode:{
 
 })
 
-const StripeModel = mongoose.model("merchants", StripeSchema)
+const StripeModel = mongoose.model("stripe", StripeSchema)
 
 module.exports = StripeModel

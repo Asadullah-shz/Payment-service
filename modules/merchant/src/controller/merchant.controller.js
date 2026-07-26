@@ -1,4 +1,4 @@
-const MerchantModel = require("../model/merchant.model")
+const MerchantModel = require("../model/merchant")
 const axios = require('axios');
 
 
