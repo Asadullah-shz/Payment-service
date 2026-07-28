@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const WebhookEventSchema = new mongoose.Schema(
+const RefundSchema = new mongoose.Schema(
     {
         merchantId: {
             type: String,
@@ -12,29 +12,25 @@ const WebhookEventSchema = new mongoose.Schema(
             default: "stripe",
             required: true,
         },
-        eventId: {
-            type: String,
-            required: true,
-            unique: true,
-            index: true,
-        },
-        eventType: {
-            type: String,
-            required: true,
-            index: true,
-        },
-        resourceId: {
+       providerRefundId: {
             type: String,
             required: true,
         },
-        payload: {
-            type: mongoose.Schema.Types.Mixed,
+        amount: {
+            type: Number,
             required: true,
         },
-        processed: {
+        currency: {
+            type: String,
+            required: true,
+        },
+        reason: {
+            type:String,
+            required: true,
+        },
+        metadata: {
             type: Boolean,
             default: false,
-            index: true,
         },
         processedAt: {
             type: Date,
@@ -46,5 +42,13 @@ const WebhookEventSchema = new mongoose.Schema(
     }
 );
 
-const WebhookEventModel = mongoose.model("WebhookEvent", WebhookEventSchema);
-module.exports = WebhookEventModel;
+
+
+
+
+
+
+
+
+const RefundModel = mongoose.model("RefundEvent", RefundSchema);
+module.exports = RefundModel;

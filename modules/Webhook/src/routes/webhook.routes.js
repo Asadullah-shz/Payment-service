@@ -1,15 +1,15 @@
 const express = require('express');
 const webhookController = require('../controller/webhook.controller');
-const verifyStripeSignature = require('../middleware/verifyStripeSignature');
+const verifyGatewaySignature = require('../middleware/verifyGatewaySignature');
 
 const router = express.Router();
 
 
 router.post(
-  '/stripe/:merchantId',
+  '/gateway/:merchantId',
   express.raw({ type: 'application/json' }), 
-  verifyStripeSignature,
-  webhookController.HandleStripeWebhook
+  verifyGatewaySignature,
+  webhookController.HandleGatewayWebhook
 );
 
 module.exports = router;

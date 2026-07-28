@@ -1,5 +1,5 @@
 const StripeModel = require("../model/stripe")
-
+const stripe = require("stripe");
 
 async function StripeRegister(req, res) {
 
@@ -125,4 +125,48 @@ async function GetMerchantconfigbyID(req, res) {
     }
 }
 
-module.exports = { StripeRegister, UpdateStripe, GetMerchantconfigbyID }
+async function createRefund(req, res) {
+    const { merchantId, paymentIntentId, amount, reason } = req.body;
+
+    try {
+        if (!merchantId || !paymentIntentId) {
+            return res.status(400).json({ message: "merchantId and paymentIntentId are required" });
+        }
+
+        const stripeConfig = await StripeModel.findOne({ merchantId });
+        
+        if (!stripeConfig || !stripeConfig.secretKey) {
+            return res.status(404).json({ message: "Stripe configuration not found for this merchant" });
+        }
+
+        const stripeClient = stripe(stripeConfig.secretKey);
+
+        const refundParams = {
+            payment_intent: paymentIntentId,
+        };
+        
+        if (amount) {
+            refundParams.amount = amount; 
+        }
+        
+        if (reason) {
+            refundParams.reason = reason;
+        }
+
+        const refund = await stripeClient.refunds.create(refundParams);
+        
+        return res.status(200).json({
+            message: "Refund initiated successfully",
+            refund: refund
+        });
+
+    } catch (error) {
+        console.error("Error creating stripe refund:", error);
+        return res.status(500).json({
+            message: "Stripe Error",
+            error: error.message
+        });
+    }
+}
+
+module.exports = { StripeRegister, UpdateStripe, GetMerchantconfigbyID, createRefund }

@@ -1,6 +1,7 @@
 const PaymentModel = require("../model/payment")
-const stripe = require('stripe');
+const GatewayFactory = require('../../../gateway/gateway.factory');
 const axios = require('axios');
+const EventBus = require('../../../EventBus/eventBus.service');
 
 async function PaymentCreation(req, res) {
 
@@ -13,61 +14,53 @@ async function PaymentCreation(req, res) {
         }
 
 
-        let merchantStripeConfig;
+        let preferredGateway = 'stripe';
         try {
-            console.log(`Making request to Stripe Service for merchant: ${merchantId}`);
-            const stripeResponse = await axios.get(`http://localhost:7000/stripe/getconfig/${merchantId}`);
-            merchantStripeConfig = stripeResponse.data.result;
-            console.log("Successfully fetched from Stripe Service:", merchantStripeConfig);
+            const merchantResponse = await axios.get(`http://localhost:5000/merchant/${merchantId}`);
+            const merchant = merchantResponse.data.merchant;
+            preferredGateway = merchant?.preferredGateway || 'stripe';
         } catch (error) {
-            if (error.response) {
-
-                console.error("Stripe Service returned an error status:", error.response.status);
-                console.error("Stripe Service error data:", error.response.data);
-                return res.status(error.response.status).json({
-                    message: "Error from Stripe Microservice",
-                    details: error.response.data
-                });
-            } else if (error.request) {
-
-                console.error("No response received from Stripe Service. Is it running on port 7000?", error.message);
-                return res.status(503).json({ message: "Stripe Microservice is unreachable" });
-            } else {
-                console.error("Axios request setup error:", error.message);
-                return res.status(500).json({ message: "Internal Server Error setting up Axios" });
-            }
+            console.error("Warning: Could not fetch merchant details, defaulting to stripe.", error.message);
         }
 
-        if (!merchantStripeConfig || !merchantStripeConfig.secretKey) {
-            return res.status(404).json({ message: "Merchant Stripe configuration is missing secret key" });
+        const gateway = GatewayFactory.get(preferredGateway);
+
+        let gatewayResponse;
+        try {
+            gatewayResponse = await gateway.createPayment({
+                merchantId,
+                amount,
+                currency: 'usd',
+                description,
+                metadata: { merchantId }
+            });
+        } catch (error) {
+            console.error("Gateway createPayment error:", error.message);
+            return res.status(500).json({ message: "Failed to create payment via Gateway", details: error.message });
         }
-
-
-        const stripeClient = stripe(merchantStripeConfig.secretKey);
-
-
-        const paymentIntent = await stripeClient.paymentIntents.create({
-            amount: amount,
-            currency: 'usd',
-            description: description,
-            metadata: { merchantId: merchantId }
-        });
 
 
         const PaymentConfig = await PaymentModel.create({
             merchantId,
-            stripeConfigId: merchantStripeConfig._id,
-            paymentIntentId: paymentIntent.id,
-            clientSecret: paymentIntent.client_secret,
+            stripeConfigId: gatewayResponse.providerConfigId,
+            paymentIntentId: gatewayResponse.providerPaymentId,
+            clientSecret: gatewayResponse.clientSecret,
             amount,
             description,
             status: "pending",
         })
 
+  
+        EventBus.publish('payment.created', {
+            merchantId,
+            paymentId: PaymentConfig._id,
+            amount,
+            status: "pending"
+        }).catch(err => console.error("Failed to publish payment.created event:", err));
 
         res.status(200).json({
             message: 'Payment Successfully Initiated',
-            clientSecret: paymentIntent.client_secret,
+            clientSecret: gatewayResponse.clientSecret,
             payment: PaymentConfig
         })
 
@@ -79,7 +72,6 @@ async function PaymentCreation(req, res) {
         })
     }
 }
-
 
 async function getAllPayments(req, res) {
     try {
@@ -130,7 +122,7 @@ async function getPaymentById(req, res) {
             })
         }
 
-        // Security check: ensure the requester owns this payment record
+
         if (req.user) {
             if (req.user.role === 'user' && paymentRecord.userId?.toString() !== req.user.id) {
                 return res.status(403).json({ message: "Access denied. You can only view your own payments." });
@@ -183,28 +175,35 @@ async function cancelPayment(req, res) {
             console.error("Stripe Service error during cancel:", error.message);
             return res.status(404).json({ message: "Merchant Stripe configuration not found in Stripe Microservice" });
         }
-
-        if (!merchantStripeConfig || !merchantStripeConfig.secretKey) {
-            return res.status(404).json({ message: "Merchant Stripe configuration is missing secret key" });
-        }
-
-
-        const stripeClient = stripe(merchantStripeConfig.secretKey);
-
+        let preferredGateway = 'stripe';
         try {
-
-            await stripeClient.paymentIntents.cancel(paymentvalidation.paymentIntentId);
-        } catch (stripeError) {
-            console.error("Stripe API failed to cancel:", stripeError.message);
-            return res.status(400).json({ message: "Failed to cancel payment in Stripe", error: stripeError.message });
+            const merchantResponse = await axios.get(`http://localhost:5000/merchant/${paymentvalidation.merchantId}`);
+            const merchant = merchantResponse.data.merchant;
+            preferredGateway = merchant?.preferredGateway || 'stripe';
+        } catch (error) {
+            console.error("Warning: Could not fetch merchant details, defaulting to stripe.", error.message);
         }
 
+        const gateway = GatewayFactory.get(preferredGateway);
+
+        let gatewayResponse;
+        try {
+            gatewayResponse = await gateway.cancelPayment(paymentvalidation.paymentIntentId, paymentvalidation.merchantId);
+        } catch (error) {
+            return res.status(500).json({ message: "Failed to cancel payment with Gateway", details: error.message });
+        }
 
         const payment = await PaymentModel.findByIdAndUpdate(
             paymentId,
             { status: "cancelled" },
             { new: true }
         );
+
+        EventBus.publish('payment.cancelled', {
+            merchantId: payment.merchantId,
+            paymentId: payment._id,
+            status: "cancelled"
+        }).catch(err => console.error("Failed to publish payment.cancelled event:", err));
 
         res.status(200).json({
             message: "Payment Successfully Cancelled",
@@ -253,37 +252,50 @@ async function PaymentStatusById(req, res) {
 
 async function PaymentStatusUpdateById(req, res) {
     const { status } = req.body;
-    
-    const paymentIntentId = req.params.paymentIntentId; 
+
+    const paymentIntentId = req.params.paymentIntentId;
     try {
         if (!paymentIntentId) {
             return res.status(400).json({ message: "paymentIntentId is required" });
         }
-      
+
         const paymentUpdater = await PaymentModel.findOneAndUpdate(
             { paymentIntentId: paymentIntentId },
             { status: status },
-            { new: true } 
+            { new: true }
         );
         if (!paymentUpdater) {
             return res.status(404).json({
                 message: "No Payment Exist in Database"
             });
         }
-        if (status === 'succeeded') {
+        if (status === 'succeeded' || status === 'refunded') {
             try {
-                await axios.post('http://localhost:11000/transaction/create', { 
+
+                const txStatus = status === 'succeeded' ? 'completed' : status;
+
+                await axios.post('http://localhost:11000/transaction/create', {
                     paymentId: paymentUpdater._id,
                     userId: paymentUpdater.userId,
                     merchantId: paymentUpdater.merchantId,
-                    amount: req.body.amount,
-                    currency: req.body.currency,
+                    amount: req.body.amount || paymentUpdater.amount,
+                    currency: req.body.currency || 'USD',
                     providerTransactionId: req.body.latest_charge,
-                    status: 'completed'
+                    status: txStatus
                 });
             } catch (err) {
                 console.error("Failed to notify transaction service:", err.message);
             }
+        }
+
+       
+        if (status === 'succeeded' || status === 'failed') {
+            EventBus.publish(`payment.${status}`, {
+                merchantId: paymentUpdater.merchantId,
+                paymentId: paymentUpdater._id,
+                amount: paymentUpdater.amount,
+                status: status
+            }).catch(err => console.error(`Failed to publish payment.${status} event:`, err));
         }
 
         res.status(200).json({
@@ -300,4 +312,83 @@ async function PaymentStatusUpdateById(req, res) {
 }
 
 
-module.exports = { PaymentCreation, getAllPayments, getPaymentById, cancelPayment, PaymentStatusById,PaymentStatusUpdateById }
+async function initiateRefund(req, res) {
+    const { paymentId, amount, reason } = req.body;
+
+    try {
+        if (!paymentId) {
+            return res.status(400).json({ message: "paymentId is required" });
+        }
+
+        const payment = await PaymentModel.findById(paymentId);
+        if (!payment) {
+            return res.status(404).json({ message: "Payment not found" });
+        }
+
+        if (payment.status !== 'succeeded' && payment.status !== 'completed' && payment.status !== 'pending') {
+
+            return res.status(400).json({ message: `Payment cannot be refunded. Current status: ${payment.status}` });
+        }
+
+        const merchantId = req.user?.id || payment.merchantId;
+
+
+        let preferredGateway = 'stripe';
+        try {
+            const merchantResponse = await axios.get(`http://localhost:5000/merchant/${merchantId}`);
+            const merchant = merchantResponse.data.merchant;
+            preferredGateway = merchant?.preferredGateway || 'stripe';
+        } catch (error) {
+            console.error("Warning: Could not fetch merchant details, defaulting to stripe.", error.message);
+        }
+
+        const gateway = GatewayFactory.get(preferredGateway);
+
+        let gatewayResponse;
+        try {
+            gatewayResponse = await gateway.refundPayment({
+                merchantId: merchantId,
+                paymentId: payment.paymentIntentId,
+                amount: amount,
+                reason: reason
+            });
+        } catch (error) {
+            console.error("Failed to initiate refund via Gateway:", error.message);
+            return res.status(500).json({ message: "Failed to initiate refund with Gateway", details: error.message });
+        }
+
+
+        try {
+            await axios.post(`http://localhost:13000/refund/create`, {
+                merchantId: merchantId,
+                providerRefundId: gatewayResponse.providerRefundId,
+                amount: gatewayResponse.amount,
+                currency: gatewayResponse.currency,
+                reason: reason || "requested_by_customer"
+            });
+        } catch (error) {
+            console.error("Failed to save initial refund record in Refund Service:", error.message);
+        }
+
+        EventBus.publish('refund.created', {
+            merchantId: merchantId,
+            paymentId: payment.paymentIntentId,
+            amount: gatewayResponse.amount,
+            status: "pending"
+        }).catch(err => console.error("Failed to publish refund.created event:", err));
+
+        res.status(200).json({
+            message: "Refund Initiated Successfully",
+            refund: gatewayResponse
+        });
+
+    } catch (error) {
+        console.error("Error initiating refund:", error);
+        res.status(500).json({
+            message: "Internal Server Error",
+            error: error.message
+        });
+    }
+}
+
+module.exports = { PaymentCreation, getAllPayments, getPaymentById, cancelPayment, PaymentStatusById, PaymentStatusUpdateById, initiateRefund }

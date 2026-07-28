@@ -19,8 +19,10 @@ const MerchantSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-
-
+    preferredGateway: {
+        type: String,
+        default: 'stripe'
+    }
 })
 
 const MerchantModel = mongoose.model("merchants", MerchantSchema)

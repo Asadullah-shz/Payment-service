@@ -149,4 +149,18 @@ async function UpdateMerchant(req, res) {
 
 }
 
-module.exports = { MerchantRegister, MerchantDetail, UpdateMerchant }
+async function getMerchantById(req, res) {
+    const { id } = req.params;
+    try {
+        const merchant = await MerchantModel.findById(id);
+        if (!merchant) {
+            return res.status(404).json({ message: "Merchant not found" });
+        }
+        res.status(200).json({ merchant });
+    } catch (error) {
+        console.error("Error fetching merchant by ID:", error);
+        res.status(500).json({ message: "Internal Server Error", error: error.message });
+    }
+}
+
+module.exports = { MerchantRegister, MerchantDetail, UpdateMerchant, getMerchantById }

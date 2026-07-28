@@ -6,10 +6,10 @@ const PAYMENT_SERVICE_URL = process.env.PAYMENT_SERVICE_URL || 'http://localhost
 const TRANSACTION_SERVICE_URL = process.env.TRANSACTION_SERVICE_URL || 'http://localhost:11000/transaction/transactions/:id';
 
 class WebhookService {
-    async processStripeEvent(event) {
+    async processGatewayEvent(event) {
         const eventId = event.id;
         const eventType = event.type;
-        const payload = event.data.object;
+        const payload = event.data?.object || event.payload || {}; 
         const resourceId = payload.id;
         const merchantId = payload.metadata?.merchantId || "unknown";
 
