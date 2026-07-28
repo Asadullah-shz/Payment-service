@@ -6,6 +6,10 @@ const PaymentSchema = new mongoose.Schema({
         ref: "merchants",
         required: true
     },
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "users",
+    },
     stripeConfigId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "stripe",

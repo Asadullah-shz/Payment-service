@@ -82,14 +82,21 @@ async function PaymentCreation(req, res) {
 
 
 async function getAllPayments(req, res) {
-    const merchantId = req.merchant ? req.merchant.id : req.body.merchantId;
-
     try {
-        if (!merchantId) {
-            return res.status(400).json({ message: "merchantId is required" })
+        let query = {};
+        if (req.user) {
+            if (req.user.role === 'merchant') {
+                query.merchantId = req.user.id;
+            } else if (req.user.role === 'user') {
+                query.userId = req.user.id;
+            } else {
+                return res.status(403).json({ message: "Access denied." });
+            }
+        } else {
+            return res.status(401).json({ message: "Unauthorized" });
         }
 
-        const paymentRecords = await PaymentModel.find({ merchantId }).populate("succeeded").limit(10);
+        const paymentRecords = await PaymentModel.find(query).populate("succeeded").limit(10);
 
         res.status(200).json({
             message: "Payment Records Fetched Successfully",
@@ -121,6 +128,16 @@ async function getPaymentById(req, res) {
             return res.status(404).json({
                 message: "Payment record not found"
             })
+        }
+
+        // Security check: ensure the requester owns this payment record
+        if (req.user) {
+            if (req.user.role === 'user' && paymentRecord.userId?.toString() !== req.user.id) {
+                return res.status(403).json({ message: "Access denied. You can only view your own payments." });
+            }
+            if (req.user.role === 'merchant' && paymentRecord.merchantId?.toString() !== req.user.id) {
+                return res.status(403).json({ message: "Access denied. You can only view payments made to your merchant account." });
+            }
         }
 
         res.status(200).json({
@@ -204,7 +221,7 @@ async function cancelPayment(req, res) {
 }
 
 async function PaymentStatusById(req, res) {
-   
+
     const paymentId = req.params.id;
 
     try {
@@ -234,6 +251,53 @@ async function PaymentStatusById(req, res) {
     }
 }
 
+async function PaymentStatusUpdateById(req, res) {
+    const { status } = req.body;
+    
+    const paymentIntentId = req.params.paymentIntentId; 
+    try {
+        if (!paymentIntentId) {
+            return res.status(400).json({ message: "paymentIntentId is required" });
+        }
+      
+        const paymentUpdater = await PaymentModel.findOneAndUpdate(
+            { paymentIntentId: paymentIntentId },
+            { status: status },
+            { new: true } 
+        );
+        if (!paymentUpdater) {
+            return res.status(404).json({
+                message: "No Payment Exist in Database"
+            });
+        }
+        if (status === 'succeeded') {
+            try {
+                await axios.post('http://localhost:11000/transaction/create', { 
+                    paymentId: paymentUpdater._id,
+                    userId: paymentUpdater.userId,
+                    merchantId: paymentUpdater.merchantId,
+                    amount: req.body.amount,
+                    currency: req.body.currency,
+                    providerTransactionId: req.body.latest_charge,
+                    status: 'completed'
+                });
+            } catch (err) {
+                console.error("Failed to notify transaction service:", err.message);
+            }
+        }
+
+        res.status(200).json({
+            message: "Payment Status Updated",
+            paymentUpdaterStatus: paymentUpdater.status,
+        });
+    } catch (error) {
+        console.error("Error in Payment Status:", error);
+        res.status(500).json({
+            message: "Internal Server Error",
+            error: error.message || error
+        });
+    }
+}
 
 
-module.exports = { PaymentCreation, getAllPayments, getPaymentById, cancelPayment,PaymentStatusById }
+module.exports = { PaymentCreation, getAllPayments, getPaymentById, cancelPayment, PaymentStatusById,PaymentStatusUpdateById }

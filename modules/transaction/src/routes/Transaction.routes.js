@@ -4,9 +4,10 @@ const { authorize } = require("../middleware/authorization.middleware")
 
 const router = express.Router()
 
-router.post("/config", authorize("merchant"), TransactionController.StripeRegister)
-router.post("/update",authorize("merchant"),TransactionController.UpdateStripe)
-router.get("/getconfig/:merchantId",TransactionController.GetMerchantconfigbyID)
+router.get("/transactions", authorize("merchant"), TransactionController.Transactions)
+router.get("/transactions/:id",authorize("merchant"),TransactionController.TransactionById)
+router.post("/create", TransactionController.TransactionCreation)
+
 
 
 
