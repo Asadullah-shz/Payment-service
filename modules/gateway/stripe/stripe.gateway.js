@@ -34,7 +34,6 @@ class StripeGateway extends GatewayInterface {
             const paymentIntent = await stripeClient.paymentIntents.create(stripeParams);
             const mappedResponse = StripeMapper.fromStripePaymentIntent(paymentIntent);
 
-
             mappedResponse.providerConfigId = configId;
             return mappedResponse;
         } catch (error) {
@@ -78,7 +77,6 @@ class StripeGateway extends GatewayInterface {
     async verifyWebhook(req, merchantId) {
         const { stripeClient } = await this._getStripeClient(merchantId);
         const sig = req.headers['stripe-signature'];
-
 
         try {
             const stripeResponse = await axios.get(`http://localhost:7000/stripe/getconfig/${merchantId}`);

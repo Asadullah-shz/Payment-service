@@ -1,0 +1,264 @@
+openapi: 3.1.0
+info:
+  title: Payment Infrastructure API
+  description: Multi-tenant, multi-gateway payment infrastructure platform for developers.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8000
+    description: API Gateway (Unified endpoints)
+  - url: http://localhost:6000
+    description: Payment Service Direct
+  - url: http://localhost:5000
+    description: Merchant Service Direct
+  - url: http://localhost:16000
+    description: Subscription Service Direct
+  - url: http://localhost:17000
+    description: Payout Service Direct
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+
+security:
+  - apiKeyAuth: []
+
+paths:
+  /auth/login:
+    post:
+      summary: Merchant Login
+      description: Login to obtain a JWT token (for dashboard access).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Successful login
+        '401':
+          description: Unauthorized
+
+  /payments:
+    post:
+      summary: Create a Payment
+      description: Initiates a new payment using the configured gateway (e.g. Stripe, PayPal). Includes idempotency support.
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema:
+            type: string
+          required: false
+          description: Unique key to prevent duplicate payments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: number
+                  example: 5000
+                currency:
+                  type: string
+                  example: "usd"
+                paymentMethod:
+                  type: string
+                  example: "card"
+              required:
+                - amount
+                - currency
+      responses:
+        '201':
+          description: Payment created
+        '400':
+          description: Validation error
+        '409':
+          description: Conflict (Idempotency key mismatch)
+        '500':
+          description: Gateway or internal error
+
+  /payments/{id}/cancel:
+    post:
+      summary: Cancel a Payment
+      description: Cancels an existing, uncaptured payment.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Payment cancelled
+        '404':
+          description: Payment not found
+
+  /refund/create:
+    post:
+      summary: Initiate Refund
+      description: Refunds a captured payment.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paymentId:
+                  type: string
+                amount:
+                  type: number
+                reason:
+                  type: string
+      responses:
+        '201':
+          description: Refund initiated
+
+  /subscriptions:
+    post:
+      summary: Create Subscription
+      description: Creates a recurring billing subscription.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                planName:
+                  type: string
+                amount:
+                  type: number
+                interval:
+                  type: string
+                  enum: [monthly, yearly]
+                trialPeriodDays:
+                  type: number
+                  default: 0
+      responses:
+        '201':
+          description: Subscription created
+
+    get:
+      summary: List Subscriptions
+      responses:
+        '200':
+          description: A list of subscriptions
+
+  /subscriptions/{id}/pause:
+    post:
+      summary: Pause Subscription
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Subscription paused
+
+  /subscriptions/{id}/resume:
+    post:
+      summary: Resume Subscription
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Subscription resumed
+
+  /subscriptions/{id}/cancel:
+    post:
+      summary: Cancel Subscription
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Subscription cancelled
+
+  /payouts:
+    post:
+      summary: Create Payout
+      description: Initiate a transfer of funds to a connected destination account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: number
+                currency:
+                  type: string
+                destination:
+                  type: string
+                  description: External account ID or bank account reference
+      responses:
+        '201':
+          description: Payout initiated
+    get:
+      summary: List Payouts
+      responses:
+        '200':
+          description: List of payouts
+
+  /payouts/{id}/cancel:
+    post:
+      summary: Cancel Payout
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Payout cancelled
+
+  /webhook-endpoints:
+    post:
+      summary: Register Webhook
+      description: Register a URL to receive events from the platform.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                events:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Webhook registered

@@ -1,0 +1,321 @@
+{
+    "info": {
+        "name": "Payment Infrastructure API",
+        "description": "Multi-tenant, multi-gateway payment infrastructure platform APIs.",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:8000"
+        },
+        {
+            "key": "api_key",
+            "value": "your_api_key_here"
+        },
+        {
+            "key": "jwt_token",
+            "value": "your_jwt_token_here"
+        }
+    ],
+    "item": [
+        {
+            "name": "Authentication",
+            "item": [
+                {
+                    "name": "Login",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"merchant@example.com\",\n    \"password\": \"securepassword\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "login"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Payments",
+            "item": [
+                {
+                    "name": "Create Payment",
+                    "request": {
+                        "auth": {
+                            "type": "apikey",
+                            "apikey": [
+                                {
+                                    "key": "value",
+                                    "value": "{{api_key}}",
+                                    "type": "string"
+                                },
+                                {
+                                    "key": "key",
+                                    "value": "x-api-key",
+                                    "type": "string"
+                                },
+                                {
+                                    "key": "in",
+                                    "value": "header",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Idempotency-Key",
+                                "value": "random-uuid-1234"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"amount\": 5000,\n    \"currency\": \"usd\",\n    \"paymentMethod\": \"card\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/payments",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "payments"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Cancel Payment",
+                    "request": {
+                        "auth": {
+                            "type": "apikey",
+                            "apikey": [
+                                {
+                                    "key": "value",
+                                    "value": "{{api_key}}",
+                                    "type": "string"
+                                },
+                                {
+                                    "key": "key",
+                                    "value": "x-api-key",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "POST",
+                        "url": {
+                            "raw": "{{base_url}}/payments/pay_123/cancel",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "payments",
+                                "pay_123",
+                                "cancel"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Refunds",
+            "item": [
+                {
+                    "name": "Create Refund",
+                    "request": {
+                        "auth": {
+                            "type": "apikey",
+                            "apikey": [
+                                {
+                                    "key": "value",
+                                    "value": "{{api_key}}",
+                                    "type": "string"
+                                },
+                                {
+                                    "key": "key",
+                                    "value": "x-api-key",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"paymentId\": \"pay_123\",\n    \"amount\": 5000,\n    \"reason\": \"requested_by_customer\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/refund/create",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "refund",
+                                "create"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Subscriptions",
+            "item": [
+                {
+                    "name": "Create Subscription",
+                    "request": {
+                        "auth": {
+                            "type": "apikey",
+                            "apikey": [
+                                {
+                                    "key": "value",
+                                    "value": "{{api_key}}",
+                                    "type": "string"
+                                },
+                                {
+                                    "key": "key",
+                                    "value": "x-api-key",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"planName\": \"Pro Plan\",\n    \"amount\": 9900,\n    \"interval\": \"monthly\",\n    \"trialPeriodDays\": 14\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/subscriptions",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "subscriptions"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Payouts",
+            "item": [
+                {
+                    "name": "Create Payout",
+                    "request": {
+                        "auth": {
+                            "type": "apikey",
+                            "apikey": [
+                                {
+                                    "key": "value",
+                                    "value": "{{api_key}}",
+                                    "type": "string"
+                                },
+                                {
+                                    "key": "key",
+                                    "value": "x-api-key",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"amount\": 10000,\n    \"currency\": \"usd\",\n    \"destination\": \"acct_123\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/payouts",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "payouts"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Webhooks",
+            "item": [
+                {
+                    "name": "Register Webhook",
+                    "request": {
+                        "auth": {
+                            "type": "apikey",
+                            "apikey": [
+                                {
+                                    "key": "value",
+                                    "value": "{{api_key}}",
+                                    "type": "string"
+                                },
+                                {
+                                    "key": "key",
+                                    "value": "x-api-key",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"url\": \"https://merchant.example.com/webhooks\",\n    \"events\": [\n        \"payment.succeeded\",\n        \"refund.succeeded\"\n    ]\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/webhook-endpoints",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "webhook-endpoints"
+                            ]
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+}

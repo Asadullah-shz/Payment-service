@@ -6,6 +6,8 @@ audit
 .env
 **/.env
 .env.test
+run_services.js
+test_flow.js
 
 # Logs
 npm-debug.log*

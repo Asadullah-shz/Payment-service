@@ -3,8 +3,8 @@ const mongoose = require('mongoose');
 const app = require('./app');
 const MerchantWebhookService = require('./src/service/merchantWebhook.service');
 
-const PORT = process.env.PORT || 14000;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://panaw29744_db_user:4vPa2C4Kwofs3xG9@paymentservicedb.nub6dm1.mongodb.net/Payments';
+const PORT = process.env.PORT;
+const MONGO_URI = process.env.MONGO_URI;
 
 async function bootstrap() {
     try {

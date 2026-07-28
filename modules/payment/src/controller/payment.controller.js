@@ -14,16 +14,15 @@ async function PaymentCreation(req, res) {
         }
 
 
-        let preferredGateway = 'stripe';
+        let gatewayName = 'stripe';
         try {
-            const merchantResponse = await axios.get(`http://localhost:5000/merchant/${merchantId}`);
-            const merchant = merchantResponse.data.merchant;
-            preferredGateway = merchant?.preferredGateway || 'stripe';
+            const routingResult = await EventBus.request('rpc_gateway_route', { merchantId, amount, currency: 'usd' });
+            gatewayName = routingResult.gateway || 'stripe';
         } catch (error) {
-            console.error("Warning: Could not fetch merchant details, defaulting to stripe.", error.message);
+            console.error("Warning: Could not fetch routing decision, defaulting to stripe.", error.message);
         }
 
-        const gateway = GatewayFactory.get(preferredGateway);
+        const gateway = GatewayFactory.get(gatewayName);
 
         let gatewayResponse;
         try {
@@ -167,24 +166,15 @@ async function cancelPayment(req, res) {
         }
 
 
-        let merchantStripeConfig;
+        let gatewayName = 'stripe';
         try {
-            const stripeResponse = await axios.get(`http://localhost:7000/stripe/getconfig/${paymentvalidation.merchantId}`);
-            merchantStripeConfig = stripeResponse.data.result;
-        } catch (error) {
-            console.error("Stripe Service error during cancel:", error.message);
-            return res.status(404).json({ message: "Merchant Stripe configuration not found in Stripe Microservice" });
-        }
-        let preferredGateway = 'stripe';
-        try {
-            const merchantResponse = await axios.get(`http://localhost:5000/merchant/${paymentvalidation.merchantId}`);
-            const merchant = merchantResponse.data.merchant;
-            preferredGateway = merchant?.preferredGateway || 'stripe';
+            const merchant = await EventBus.request('rpc_merchant_get', { merchantId: paymentvalidation.merchantId });
+            gatewayName = merchant?.preferredGateway || 'stripe';
         } catch (error) {
             console.error("Warning: Could not fetch merchant details, defaulting to stripe.", error.message);
         }
 
-        const gateway = GatewayFactory.get(preferredGateway);
+        const gateway = GatewayFactory.get(gatewayName);
 
         let gatewayResponse;
         try {
@@ -333,16 +323,15 @@ async function initiateRefund(req, res) {
         const merchantId = req.user?.id || payment.merchantId;
 
 
-        let preferredGateway = 'stripe';
+        let gatewayName = 'stripe';
         try {
-            const merchantResponse = await axios.get(`http://localhost:5000/merchant/${merchantId}`);
-            const merchant = merchantResponse.data.merchant;
-            preferredGateway = merchant?.preferredGateway || 'stripe';
+            const merchant = await EventBus.request('rpc_merchant_get', { merchantId });
+            gatewayName = merchant?.preferredGateway || 'stripe';
         } catch (error) {
             console.error("Warning: Could not fetch merchant details, defaulting to stripe.", error.message);
         }
 
-        const gateway = GatewayFactory.get(preferredGateway);
+        const gateway = GatewayFactory.get(gatewayName);
 
         let gatewayResponse;
         try {
@@ -359,7 +348,8 @@ async function initiateRefund(req, res) {
 
 
         try {
-            await axios.post(`http://localhost:13000/refund/create`, {
+            // Replaced internal HTTP with RPC for refund creation
+            await EventBus.request('rpc_refund_create', {
                 merchantId: merchantId,
                 providerRefundId: gatewayResponse.providerRefundId,
                 amount: gatewayResponse.amount,
@@ -367,7 +357,7 @@ async function initiateRefund(req, res) {
                 reason: reason || "requested_by_customer"
             });
         } catch (error) {
-            console.error("Failed to save initial refund record in Refund Service:", error.message);
+            console.error("Failed to save initial refund record via RPC:", error.message);
         }
 
         EventBus.publish('refund.created', {

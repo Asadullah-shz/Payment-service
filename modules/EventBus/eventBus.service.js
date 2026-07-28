@@ -94,7 +94,93 @@ class EventBus {
             }
         });
     }
+
+   
+    async request(rpcQueue, payload) {
+        if (!this.channel) {
+            await this.connect();
+        }
+
+        return new Promise(async (resolve, reject) => {
+            const correlationId = require('crypto').randomBytes(16).toString('hex');
+            
+          
+            const q = await this.channel.assertQueue('', { exclusive: true });
+            
+            
+            const timeout = setTimeout(() => {
+                this.channel.cancel(correlationId);
+                reject(new Error(`[EventBus RPC] Request to ${rpcQueue} timed out after 10000ms`));
+            }, 10000);
+
+           
+            await this.channel.consume(q.queue, (msg) => {
+                if (msg && msg.properties.correlationId === correlationId) {
+                    clearTimeout(timeout);
+                    try {
+                        const response = JSON.parse(msg.content.toString());
+                        if (response.error) {
+                            reject(new Error(response.errorMessage || 'RPC Error'));
+                        } else {
+                            resolve(response.data);
+                        }
+                    } catch (e) {
+                        reject(e);
+                    }
+                    
+                   
+                }
+            }, { noAck: true, consumerTag: correlationId });
+
+          
+            const message = Buffer.from(JSON.stringify(payload));
+            this.channel.sendToQueue(rpcQueue, message, {
+                correlationId: correlationId,
+                replyTo: q.queue,
+                persistent: false, 
+                expiration: '10000' 
+            });
+        });
+    }
+
+    async respond(rpcQueue, handler) {
+        if (!this.channel) {
+            await this.connect();
+        }
+
+   
+        await this.channel.assertQueue(rpcQueue, { durable: false }); 
+        this.channel.prefetch(1);
+        
+        console.log(`[EventBus RPC] Listening for requests on '${rpcQueue}'`);
+
+        this.channel.consume(rpcQueue, async (msg) => {
+            if (msg !== null) {
+                let responsePayload = { data: null, error: false, errorMessage: null };
+                try {
+                    const payload = JSON.parse(msg.content.toString());
+                    const result = await handler(payload);
+                    responsePayload.data = result;
+                } catch (error) {
+                    console.error(`[EventBus RPC] Error handling request on '${rpcQueue}':`, error);
+                    responsePayload.error = true;
+                    responsePayload.errorMessage = error.message;
+                }
+
+               
+                if (msg.properties.replyTo) {
+                    this.channel.sendToQueue(
+                        msg.properties.replyTo,
+                        Buffer.from(JSON.stringify(responsePayload)),
+                        { correlationId: msg.properties.correlationId }
+                    );
+                }
+
+                this.channel.ack(msg);
+            }
+        });
+    }
 }
 
-// Export as singleton
+
 module.exports = new EventBus();
