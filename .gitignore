@@ -9,6 +9,7 @@ audit
 .env.test
 run_services.js
 test_flow.js
+Implemtation.md
 
 # Logs
 npm-debug.log*
